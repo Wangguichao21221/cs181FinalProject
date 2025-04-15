@@ -99,7 +99,22 @@ def constructBayesNet(gameState: GameState):
     variableDomainsDict = {}
 
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+
+    for housePos in gameState.getPossibleHouses():
+        for obsPos in gameState.getHouseWalls(housePos):
+            obsVar = OBS_VAR_TEMPLATE % obsPos
+            obsVars.append(obsVar)
+    for posVar in [X_POS_VAR, Y_POS_VAR]:
+        for houseVar in HOUSE_VARS:
+            edges.append((posVar,houseVar))
+            for obsVar in obsVars:
+                edges.append((houseVar,obsVar))
+    variableDomainsDict[X_POS_VAR] = X_POS_VALS
+    variableDomainsDict[Y_POS_VAR] = Y_POS_VALS
+    variableDomainsDict[FOOD_HOUSE_VAR] = HOUSE_VALS
+    variableDomainsDict[GHOST_HOUSE_VAR] = HOUSE_VALS
+    for obsVar in obsVars:
+        variableDomainsDict[obsVar] = OBS_VALS
     "*** END YOUR CODE HERE ***"
 
     variables = [X_POS_VAR, Y_POS_VAR] + HOUSE_VARS + obsVars
@@ -131,7 +146,11 @@ def fillYCPT(bayesNet: BayesNet, gameState: GameState):
 
     yFactor = bn.Factor([Y_POS_VAR], [], bayesNet.variableDomainsDict())
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    # Y_POS_VALS = [BOTH_TOP_VAL, BOTH_BOTTOM_VAL, LEFT_TOP_VAL, LEFT_BOTTOM_VAL]  
+    yFactor.setProbability({Y_POS_VAR:BOTH_TOP_VAL}, PROB_BOTH_TOP)
+    yFactor.setProbability({Y_POS_VAR:BOTH_BOTTOM_VAL}, PROB_BOTH_BOTTOM)
+    yFactor.setProbability({Y_POS_VAR:LEFT_TOP_VAL}, PROB_ONLY_LEFT_TOP)
+    yFactor.setProbability({Y_POS_VAR:LEFT_BOTTOM_VAL}, PROB_ONLY_LEFT_BOTTOM)
     "*** END YOUR CODE HERE ***"
     bayesNet.setCPT(Y_POS_VAR, yFactor)
 
@@ -263,7 +282,17 @@ def getMostLikelyFoodHousePosition(evidence: Dict, bayesNet: BayesNet, eliminati
     (This should be a very short method.)
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    foodHouseFactor = inference.inferenceByVariableElimination(bayesNet,
+            [FOOD_HOUSE_VAR], evidence, eliminationOrder)
+    maxprob = -1
+    mostlikely = {FOOD_HOUSE_VAR: None}
+    for assign in foodHouseFactor.getAllPossibleAssignmentDicts():
+        prob = foodHouseFactor.getProbability(assign)
+        if prob > maxprob:
+            maxprob = prob
+            mostlikely[FOOD_HOUSE_VAR] = assign[FOOD_HOUSE_VAR]
+    return mostlikely
+
     "*** END YOUR CODE HERE ***"
 
 
