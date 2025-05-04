@@ -76,7 +76,10 @@ class DiscreteDistribution(dict):
         {}
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        total = self.total()
+        if total > 0:
+            for key in self.keys():
+                self[key] = self[key] / total
 
     def sample(self):
         """
@@ -100,6 +103,15 @@ class DiscreteDistribution(dict):
         0.0
         """
         "*** YOUR CODE HERE ***"
+        total = self.total()
+        if total == 0:
+            return None
+        rand = random.uniform(0, total)
+        for key, value in self.items():
+            rand -= value
+            if rand <= 0:
+                return key
+        return None
         raiseNotDefined()
 
 
@@ -170,7 +182,16 @@ class InferenceModule:
         Return the probability P(noisyDistance | pacmanPosition, ghostPosition).
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        if noisyDistance is None:
+            if ghostPosition == jailPosition:
+                return 1.0
+            else:
+                return 0.0
+        if ghostPosition == jailPosition:
+            return 0.0
+        P_noisyDistance_trueDistance = busters.getObservationProbability(noisyDistance, manhattanDistance(pacmanPosition, ghostPosition))
+        return P_noisyDistance_trueDistance
+        
 
     def setGhostPosition(self, gameState, ghostPosition, index):
         """
@@ -278,8 +299,9 @@ class ExactInference(InferenceModule):
         position is known.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
-
+        for ghostpos in self.allPositions:
+            prob = self.getObservationProb(observation, gameState.getPacmanPosition(), ghostpos, self.getJailPosition())
+            self.beliefs[ghostpos] *= prob
         self.beliefs.normalize()
 
     def elapseTime(self, gameState: busters.GameState):
@@ -292,7 +314,13 @@ class ExactInference(InferenceModule):
         current position is known.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        newBeliefs = DiscreteDistribution()
+        for oldPos in self.allPositions:
+            newPosDist = self.getPositionDistribution(gameState, oldPos)
+            for newPos, prob in newPosDist.items():
+                newBeliefs[newPos] += self.beliefs[oldPos] * prob
+        self.beliefs = newBeliefs
+        self.beliefs.normalize()
 
     def getBeliefDistribution(self):
         return self.beliefs
@@ -319,7 +347,8 @@ class ParticleFilter(InferenceModule):
         """
         self.particles = []
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        self.particles = [self.legalPositions[i % len(self.legalPositions)] for i in range(self.numParticles)]
+
 
     def observeUpdate(self, observation: Union[int, float, None], gameState: busters.GameState):
         """
@@ -334,7 +363,19 @@ class ParticleFilter(InferenceModule):
         the DiscreteDistribution may be useful.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        weights = DiscreteDistribution()
+        for particle in self.particles:
+            prob = self.getObservationProb(observation, gameState.getPacmanPosition(), particle, self.getJailPosition())
+            weights[particle] += prob
+        weights.normalize()
+        if weights.total() == 0:
+            self.initializeUniformly(gameState)
+        else:
+            newParticles = []
+            for _ in range(self.numParticles):
+                newParticles.append(weights.sample())
+            self.particles = newParticles
+        
 
     def elapseTime(self, gameState: busters.GameState):
         """
@@ -342,7 +383,12 @@ class ParticleFilter(InferenceModule):
         gameState.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        newParticles = []
+        for oldParticle in self.particles:
+            newParticle = self.getPositionDistribution(gameState, oldParticle)
+            newParticles.append(newParticle.sample())
+        self.particles = newParticles
+
 
     def getBeliefDistribution(self):
         """
@@ -353,7 +399,11 @@ class ParticleFilter(InferenceModule):
         This function should return a normalized distribution.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        beliefs = DiscreteDistribution()
+        for particle in self.particles:
+            beliefs[particle] += 1
+        beliefs.normalize()
+        return beliefs
 
 
 class JointParticleFilter(ParticleFilter):
@@ -380,9 +430,11 @@ class JointParticleFilter(ParticleFilter):
         uniform prior.
         """
         self.particles = []
-        "*** YOUR CODE HERE ***"
-        raiseNotDefined()
-
+        allGhostPositions = list(itertools.product(self.legalPositions, repeat=self.numGhosts))
+        random.shuffle(allGhostPositions)
+        while len(self.particles) < self.numParticles:
+            self.particles += allGhostPositions
+        self.particles = self.particles[:self.numParticles]
     def addGhostAgent(self, agent):
         """
         Each ghost agent is registered separately and stored (in case they are
@@ -414,7 +466,25 @@ class JointParticleFilter(ParticleFilter):
         the DiscreteDistribution may be useful.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+
+        particlesForEachGhost = [[] for _ in range(self.numGhosts)]
+        for i in range(self.numGhosts):
+            weights = DiscreteDistribution()
+            for particle in self.particles:
+                prob = self.getObservationProb(observation[i], gameState.getPacmanPosition(), particle[i], self.getJailPosition(i))
+                weights[particle[i]] += prob
+            weights.normalize()
+            if weights.total() == 0:
+                self.initializeUniformly(gameState)
+                return
+            else:
+                for _ in range(self.numParticles):
+                    particlesForEachGhost[i].append(weights.sample())
+        newParticles = []
+        for i in range(self.numParticles):
+            newParticles.append(tuple(particlesForEachGhost[j][i] for j in range(self.numGhosts)))
+        self.particles = newParticles
+
 
     def elapseTime(self, gameState: busters.GameState):
         """
@@ -423,13 +493,11 @@ class JointParticleFilter(ParticleFilter):
         """
         newParticles = []
         for oldParticle in self.particles:
-            newParticle = list(oldParticle)  # A list of ghost positions
-
+            preParticle = list(oldParticle)  # A list of ghost positions
             # now loop through and update each entry in newParticle...
-            "*** YOUR CODE HERE ***"
-            raiseNotDefined()
-
-            """*** END YOUR CODE HERE ***"""
+            newParticle = []
+            for i in range(self.numGhosts):
+                newParticle.append(self.getPositionDistribution(gameState, preParticle, i, self.ghostAgents[i]).sample())
             newParticles.append(tuple(newParticle))
         self.particles = newParticles
 
